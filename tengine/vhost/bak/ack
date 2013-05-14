@@ -1,0 +1,30 @@
+server{
+	listen       50.7.98.2:80;
+	server_name ack.rootkit.us;
+	index index.html index.htm index.php;
+	root  /www/ack;
+	error_page 404 default;
+
+	location ~ .*\.(php|php5)?$
+	{
+		try_files $uri =404;
+		fastcgi_pass  127.0.0.1:9000;
+		fastcgi_index index.php;
+                fastcgi_param  SCRIPT_FILENAME  /www/ack$fastcgi_script_name;
+		include fastcgi.conf;
+	}
+ 
+	location /status {
+		stub_status on;
+		access_log   off;
+	}
+ 
+	location /{  
+		expires     	10s;	
+		# 根目录下其他文件缓存10s，expires_by_types优先级高
+		expires_by_types  30s  text/html;	
+		#根目录下text\html 类型的文件缓存30s
+	}
+
+	access_log  logs/ack-access.log  access;
+}

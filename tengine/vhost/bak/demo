@@ -1,0 +1,106 @@
+user  www-data  www-data;
+ 
+worker_processes auto;  	# 默认为auto。当设置成auto，tengine将自动启动与cpu数量相同的worker进程。
+worker_cpu_affinity auto;   	#默认为auto，CPU自动调整
+
+error_log  logs/error.log crit;
+pid        logs/nginx.pid;
+ 
+worker_rlimit_nofile 51200;
+ 
+#server_tag Apache/2.2.21;   		#Server头癿伪装
+#server_tag off   			#隐藏server头部 
+#server_info on; 			#错误信息
+#server_admin zone@rootkit.us; 		#便于定位用户反馈癿4xx和5xx错误 
+
+events{  
+	use epoll;			
+	worker_connections 51200;
+}
+ 
+http{
+
+	server_tag Apache/2.2.21;               #Server头癿伪装
+	server_tag on;                          #隐藏server头部
+	server_info on;                         #错误信息
+	server_admin zone@rootkit.us;           #便于定位用户反馈癿4xx和5xx错误
+
+	include       mime.types;
+	default_type  application/octet-stream;
+	error_page 404 /404.html;
+	 
+	server_names_hash_bucket_size 128;
+	client_header_buffer_size 32k;
+	large_client_header_buffers 4 32k;
+	client_max_body_size 50m;
+
+	sendfile on;
+	tcp_nopush     on;
+
+	keepalive_timeout 60;
+	tcp_nodelay on;
+
+	fastcgi_connect_timeout 300;
+	fastcgi_send_timeout 300;
+	fastcgi_read_timeout 300;
+	fastcgi_buffer_size 64k;
+	fastcgi_buffers 4 64k;
+	fastcgi_busy_buffers_size 128k;
+	fastcgi_temp_file_write_size 256k;
+
+	gzip on;
+	gzip_min_length  1k;
+	gzip_buffers     4 16k;
+	gzip_http_version 1.0;
+	gzip_comp_level 2;
+	gzip_types       text/plain application/x-javascript text/css application/xml;
+	gzip_vary on;
+
+	#limit_zone  crawler  $binary_remote_addr  10m;
+
+	#log format
+	log_format  access  '$remote_addr - $remote_user [$time_local] "$request" '
+		 '$status $body_bytes_sent "$http_referer" '
+		 '"$http_user_agent" $http_x_forwarded_for';
+ 
+	sysguard on;					#开启sysgurad
+	sysguard_load load=4 action=/high_load.html;		 	#当cpu负载达到4的时候访问页面为high_load.html
+	sysguard_mem swapratio=10% action=/mem_high.html;		#当swap使用达到10%的时候访问页面mem_high.html
+ 
+	server{
+		listen       80;
+		server_name ack.rootkit.us;
+		index index.html index.htm index.php;
+		root  /www/ack;
+		error_page 404 default;
+ 
+		location ~ .*\.(php|php5)?$
+		{
+			try_files $uri =404;
+	#		fastcgi_pass  unix:/tmp/php-cgi.sock;
+			fastcgi_pass  127.0.0.1:9000;
+			fastcgi_index index.php;
+	                fastcgi_param  SCRIPT_FILENAME  /www/ack$fastcgi_script_name;
+
+			include fastcgi.conf;
+		}
+ 
+		location /status {
+			stub_status on;
+			access_log   off;
+		}
+ 
+	location /{  
+		expires     	10s;			# 根目录下其他文件缓存10s，expires_by_types优先级高
+#		expires 	off;				# expires_by_types 将不会生效
+		expires_by_types  30s  text/html;	#根目录下text\html 类型的文件缓存30s
+	}
+
+	access_log  logs/access.log  access;
+#	access_log syslog:user:info:127.0.0.1:514 combined;	
+#本地和远程syslog支持以user，info级别 把日志通过514端口传送到本地，并标记为combined
+#	access_log pipe:/path/to/cronolog combined;			#管道支持
+#	access_log /path/to/file combined ratio=0.01；		#抽样支持，减少写日志癿数量，避免磁盘写爆
+	}
+	include vhost/*.conf;
+}
